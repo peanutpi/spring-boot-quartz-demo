@@ -1,17 +1,17 @@
 package com.kaviddiss.bootquartz;
 
-import com.kaviddiss.bootquartz.job.SampleJob;
-import com.kaviddiss.bootquartz.spring.AutowiringSpringBeanJobFactory;
-import liquibase.integration.spring.SpringLiquibase;
+import java.io.IOException;
+import java.util.Properties;
+
+import javax.sql.DataSource;
+
 import org.quartz.JobDetail;
-import org.quartz.Scheduler;
 import org.quartz.SimpleTrigger;
 import org.quartz.Trigger;
 import org.quartz.spi.JobFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.PropertiesFactoryBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,15 +21,15 @@ import org.springframework.scheduling.quartz.JobDetailFactoryBean;
 import org.springframework.scheduling.quartz.SchedulerFactoryBean;
 import org.springframework.scheduling.quartz.SimpleTriggerFactoryBean;
 
-import javax.sql.DataSource;
-import java.io.IOException;
-import java.util.Properties;
+import com.kaviddiss.bootquartz.job.SampleJob;
+import com.kaviddiss.bootquartz.spring.AutowiringSpringBeanJobFactory;
+
+import liquibase.integration.spring.SpringLiquibase;
 
 /**
  * Created by david on 2015-01-20.
  */
 @Configuration
-@ConditionalOnProperty(name = "quartz.enabled")
 public class SchedulerConfig {
 
     @Bean
@@ -43,8 +43,8 @@ public class SchedulerConfig {
     }
 
     @Bean
-    public Scheduler schedulerFactoryBean(DataSource dataSource, JobFactory jobFactory,
-                                          @Qualifier("sampleJobTrigger") Trigger sampleJobTrigger) throws Exception {
+    public SchedulerFactoryBean schedulerFactoryBean(DataSource dataSource, JobFactory jobFactory,
+                                                     @Qualifier("sampleJobTrigger") Trigger sampleJobTrigger) throws IOException {
         SchedulerFactoryBean factory = new SchedulerFactoryBean();
         // this allows to update triggers in DB when updating settings in config file:
         factory.setOverwriteExistingJobs(true);
@@ -52,14 +52,9 @@ public class SchedulerConfig {
         factory.setJobFactory(jobFactory);
 
         factory.setQuartzProperties(quartzProperties());
-        factory.afterPropertiesSet();
+        factory.setTriggers(sampleJobTrigger);
 
-        Scheduler scheduler = factory.getScheduler();
-        scheduler.setJobFactory(jobFactory);
-        scheduler.scheduleJob((JobDetail) sampleJobTrigger.getJobDataMap().get("jobDetail"), sampleJobTrigger);
-
-        scheduler.start();
-        return scheduler;
+        return factory;
     }
 
     @Bean
@@ -76,9 +71,8 @@ public class SchedulerConfig {
     }
 
     @Bean(name = "sampleJobTrigger")
-    public SimpleTriggerFactoryBean sampleJobTrigger(@Qualifier("sampleJobDetail") JobDetail jobDetail,
-                                                     @Value("${samplejob.frequency}") long frequency) {
-        return createTrigger(jobDetail, frequency);
+    public SimpleTriggerFactoryBean sampleJobTrigger(@Qualifier("sampleJobDetail") JobDetail jobDetail) {
+        return createTrigger(jobDetail);
     }
 
     private static JobDetailFactoryBean createJobDetail(Class jobClass) {
@@ -89,11 +83,11 @@ public class SchedulerConfig {
         return factoryBean;
     }
 
-    private static SimpleTriggerFactoryBean createTrigger(JobDetail jobDetail, long pollFrequencyMs) {
+    private static SimpleTriggerFactoryBean createTrigger(JobDetail jobDetail) {
         SimpleTriggerFactoryBean factoryBean = new SimpleTriggerFactoryBean();
         factoryBean.setJobDetail(jobDetail);
         factoryBean.setStartDelay(0L);
-        factoryBean.setRepeatInterval(pollFrequencyMs);
+        factoryBean.setRepeatInterval(10000);
         factoryBean.setRepeatCount(SimpleTrigger.REPEAT_INDEFINITELY);
         // in case of misfire, ignore all missed triggers and continue :
         factoryBean.setMisfireInstruction(SimpleTrigger.MISFIRE_INSTRUCTION_RESCHEDULE_NEXT_WITH_REMAINING_COUNT);
